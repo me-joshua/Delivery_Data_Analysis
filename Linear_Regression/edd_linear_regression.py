@@ -17,11 +17,11 @@ class EDDPredictor:
         self.scaler = StandardScaler()
         self.label_encoders = {}
         self.feature_names = []
+        self.original_data = None  # Store original data for plotting
 
     def load_and_preprocess_data(self, file_path):
         """Load and preprocess the delivery data"""
         try:
-
             df = pd.read_csv(file_path)
             print(f"Loaded {len(df)} records from {file_path}")
 
@@ -38,8 +38,10 @@ class EDDPredictor:
 
     def preprocess_data(self, df):
         """Preprocess the data for modeling"""
-
         data = df.copy()
+        
+        # Store original data for plotting
+        self.original_data = data.copy()
 
         date_columns = ['Order_date', 'Manifest Date(RTS)', 'Pickup Date', 
                        'Last Scan Date', '1st attempt Date', 'Last OFD_Date', 'Delivery Date']
@@ -84,6 +86,9 @@ class EDDPredictor:
         ]
 
         feature_data = data[feature_columns + ['Delivery_Days']].dropna()
+        
+        # Update original_data to include computed features
+        self.original_data = data.copy()
 
         print(f"\nFeature Engineering Complete:")
         print(f"Final dataset shape: {feature_data.shape}")
@@ -117,7 +122,6 @@ class EDDPredictor:
         model_results = {}
 
         for name, model in models.items():
-
             cv_scores = cross_val_score(model, X_train_scaled, y_train, cv=5, scoring='r2')
 
             model.fit(X_train_scaled, y_train)
@@ -191,7 +195,6 @@ class EDDPredictor:
 
     def plot_results(self, y_true, y_pred, model_name="Best Model"):
         """Plot comprehensive model results"""
-
         import matplotlib
         matplotlib.use('Agg')  
 
@@ -283,71 +286,117 @@ class EDDPredictor:
         plt.savefig('delivery_days_distribution.png', dpi=300, bbox_inches='tight')
         print("Delivery days distribution saved as 'delivery_days_distribution.png'")
 
-    def plot_business_insights(self, data):
+    def plot_business_insights(self, data=None):
         """Plot business insights and patterns"""
         import matplotlib
         matplotlib.use('Agg')
 
+        # Use stored original data if no data provided
+        if data is None:
+            data = self.original_data
+        
+        if data is None:
+            print("No data available for business insights plotting")
+            return
+
         fig, axes = plt.subplots(2, 3, figsize=(18, 12))
 
-        if 'Pay Type' in data.columns:
+        # Pay Type Analysis
+        if 'Pay Type' in data.columns and 'Delivery_Days' in data.columns:
             pay_type_stats = data.groupby('Pay Type')['Delivery_Days'].agg(['mean', 'std', 'count'])
             axes[0, 0].bar(pay_type_stats.index, pay_type_stats['mean'], 
-                          yerr=pay_type_stats['std'], capsize=5, alpha=0.7)
+                          yerr=pay_type_stats['std'], capsize=5, alpha=0.7, color='skyblue')
             axes[0, 0].set_title('Average Delivery Days by Pay Type')
             axes[0, 0].set_ylabel('Average Delivery Days')
-            for i, v in enumerate(pay_type_stats['mean']):
+            axes[0, 0].grid(True, alpha=0.3)
+            for i, (idx, v) in enumerate(pay_type_stats['mean'].items()):
                 axes[0, 0].text(i, v + 0.1, f'{v:.1f}', ha='center')
+        else:
+            axes[0, 0].text(0.5, 0.5, 'Pay Type data not available', 
+                           ha='center', va='center', transform=axes[0, 0].transAxes)
+            axes[0, 0].set_title('Pay Type Analysis')
 
-        if 'Zone' in data.columns:
+        # Zone Analysis
+        if 'Zone' in data.columns and 'Delivery_Days' in data.columns:
             zone_stats = data.groupby('Zone')['Delivery_Days'].agg(['mean', 'std', 'count'])
             axes[0, 1].bar(range(len(zone_stats)), zone_stats['mean'], 
-                          yerr=zone_stats['std'], capsize=5, alpha=0.7)
+                          yerr=zone_stats['std'], capsize=5, alpha=0.7, color='lightcoral')
             axes[0, 1].set_title('Average Delivery Days by Zone')
             axes[0, 1].set_ylabel('Average Delivery Days')
             axes[0, 1].set_xticks(range(len(zone_stats)))
-            axes[0, 1].set_xticklabels(zone_stats.index, rotation=45)
+            axes[0, 1].set_xticklabels(zone_stats.index, rotation=45, ha='right')
+            axes[0, 1].grid(True, alpha=0.3)
             for i, v in enumerate(zone_stats['mean']):
                 axes[0, 1].text(i, v + 0.1, f'{v:.1f}', ha='center')
+        else:
+            axes[0, 1].text(0.5, 0.5, 'Zone data not available', 
+                           ha='center', va='center', transform=axes[0, 1].transAxes)
+            axes[0, 1].set_title('Zone Analysis')
 
-        if 'Courier Name' in data.columns:
+        # Courier Analysis
+        if 'Courier Name' in data.columns and 'Delivery_Days' in data.columns:
             courier_stats = data.groupby('Courier Name')['Delivery_Days'].agg(['mean', 'std', 'count'])
-            axes[0, 2].bar(courier_stats.index, courier_stats['mean'], 
-                          yerr=courier_stats['std'], capsize=5, alpha=0.7)
+            axes[0, 2].bar(range(len(courier_stats)), courier_stats['mean'], 
+                          yerr=courier_stats['std'], capsize=5, alpha=0.7, color='lightgreen')
             axes[0, 2].set_title('Average Delivery Days by Courier')
             axes[0, 2].set_ylabel('Average Delivery Days')
+            axes[0, 2].set_xticks(range(len(courier_stats)))
+            axes[0, 2].set_xticklabels(courier_stats.index, rotation=45, ha='right')
+            axes[0, 2].grid(True, alpha=0.3)
             for i, v in enumerate(courier_stats['mean']):
                 axes[0, 2].text(i, v + 0.1, f'{v:.1f}', ha='center')
+        else:
+            axes[0, 2].text(0.5, 0.5, 'Courier data not available', 
+                           ha='center', va='center', transform=axes[0, 2].transAxes)
+            axes[0, 2].set_title('Courier Analysis')
 
-        if 'Weight_Category' in data.columns:
+        # Weight Category Analysis
+        if 'Weight_Category' in data.columns and 'Delivery_Days' in data.columns:
             weight_stats = data.groupby('Weight_Category')['Delivery_Days'].agg(['mean', 'std', 'count'])
             axes[1, 0].bar(weight_stats.index, weight_stats['mean'], 
-                          yerr=weight_stats['std'], capsize=5, alpha=0.7)
+                          yerr=weight_stats['std'], capsize=5, alpha=0.7, color='gold')
             axes[1, 0].set_title('Average Delivery Days by Weight Category')
             axes[1, 0].set_ylabel('Average Delivery Days')
             axes[1, 0].set_xlabel('Weight Category')
-            for i, v in enumerate(weight_stats['mean']):
-                axes[1, 0].text(i, v + 0.1, f'{v:.1f}', ha='center')
+            axes[1, 0].grid(True, alpha=0.3)
+            for i, (idx, v) in enumerate(weight_stats['mean'].items()):
+                axes[1, 0].text(idx, v + 0.1, f'{v:.1f}', ha='center')
+        else:
+            axes[1, 0].text(0.5, 0.5, 'Weight Category data not available', 
+                           ha='center', va='center', transform=axes[1, 0].transAxes)
+            axes[1, 0].set_title('Weight Category Analysis')
 
-        if 'Order_Hour' in data.columns:
+        # Order Hour Analysis
+        if 'Order_Hour' in data.columns and 'Delivery_Days' in data.columns:
             hour_stats = data.groupby('Order_Hour')['Delivery_Days'].mean()
-            axes[1, 1].plot(hour_stats.index, hour_stats.values, marker='o')
+            axes[1, 1].plot(hour_stats.index, hour_stats.values, marker='o', color='purple')
             axes[1, 1].set_title('Average Delivery Days by Order Hour')
             axes[1, 1].set_ylabel('Average Delivery Days')
             axes[1, 1].set_xlabel('Order Hour')
             axes[1, 1].grid(True, alpha=0.3)
+            axes[1, 1].set_xlim(0, 23)
+        else:
+            axes[1, 1].text(0.5, 0.5, 'Order Hour data not available', 
+                           ha='center', va='center', transform=axes[1, 1].transAxes)
+            axes[1, 1].set_title('Order Hour Analysis')
 
-        if 'Order_Day_of_Week' in data.columns:
+        # Day of Week Analysis
+        if 'Order_Day_of_Week' in data.columns and 'Delivery_Days' in data.columns:
             day_names = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
             dow_stats = data.groupby('Order_Day_of_Week')['Delivery_Days'].mean()
-            axes[1, 2].bar(range(len(dow_stats)), dow_stats.values, alpha=0.7)
+            axes[1, 2].bar(range(len(dow_stats)), dow_stats.values, alpha=0.7, color='orange')
             axes[1, 2].set_title('Average Delivery Days by Day of Week')
             axes[1, 2].set_ylabel('Average Delivery Days')
             axes[1, 2].set_xlabel('Day of Week')
             axes[1, 2].set_xticks(range(len(dow_stats)))
             axes[1, 2].set_xticklabels([day_names[i] for i in dow_stats.index])
+            axes[1, 2].grid(True, alpha=0.3)
             for i, v in enumerate(dow_stats.values):
                 axes[1, 2].text(i, v + 0.1, f'{v:.1f}', ha='center')
+        else:
+            axes[1, 2].text(0.5, 0.5, 'Day of Week data not available', 
+                           ha='center', va='center', transform=axes[1, 2].transAxes)
+            axes[1, 2].set_title('Day of Week Analysis')
 
         plt.tight_layout()
         plt.savefig('business_insights.png', dpi=300, bbox_inches='tight')
@@ -431,18 +480,19 @@ class EDDPredictor:
 
 def main():
     """Main function to run the EDD prediction model"""
-
     predictor = EDDPredictor()
 
     print("Loading and preprocessing data...")
-    file_path = "delivery_data_original 1.csv"  
-
+    
+    # Generate more realistic sample data
     np.random.seed(42)
     n_samples = 2000
 
+    # Generate base delivery days
     base_delivery_days = np.random.normal(5, 2, n_samples)  
     base_delivery_days = np.clip(base_delivery_days, 1, 15)  
 
+    # Create sample data with all necessary columns
     sample_data = pd.DataFrame({
         'Pay Type': np.random.choice(['COD', 'PPD'], n_samples),
         'Actual Weight': np.random.exponential(1.5, n_samples),
@@ -451,46 +501,48 @@ def main():
         'From Pincode': np.random.randint(100000, 999999, n_samples),
         'To  Pincode': np.random.randint(100000, 999999, n_samples),
         'Courier Name': np.random.choice(['Blue Dart', 'FedEx', 'DHL'], n_samples),
-        'Order_date': pd.date_range('2025-01-01', periods=n_samples, freq='H'),
         'Order_time': [f"{np.random.randint(0,24):02d}:{np.random.randint(0,60):02d}:{np.random.randint(0,60):02d}" for _ in range(n_samples)]
     })
 
+    # Generate order dates
     order_dates = pd.date_range('2025-01-01', periods=n_samples, freq='H')
-    delivery_dates = []
+    sample_data['Order_date'] = order_dates
 
+    # Generate delivery dates based on business rules
+    delivery_dates = []
     for i in range(n_samples):
         days_to_add = base_delivery_days[i]
-
+        
+        # Business rule adjustments
         if sample_data.iloc[i]['Pay Type'] == 'COD':
             days_to_add += 1  
         if sample_data.iloc[i]['Zone'] == 'Non-Metro To Metro':
             days_to_add += 1.5  
         if sample_data.iloc[i]['Actual Weight'] > 3:
             days_to_add += 0.5  
-
+        
         delivery_dates.append(order_dates[i] + pd.Timedelta(days=int(days_to_add)))
 
     sample_data['Delivery Date'] = delivery_dates
 
+    # Process the data
     processed_data, feature_columns = predictor.preprocess_data(sample_data)
 
     print("\nTraining models...")
     X_test, y_test, model_results = predictor.train_model(processed_data, feature_columns)
 
+    # Get best model predictions
     best_model_name = max(model_results.keys(), key=lambda x: model_results[x]['r2'])
     best_predictions = model_results[best_model_name]['predictions']
 
     print("\nGenerating comprehensive analysis plots...")
     print("="*50)
 
+    # Generate all plots
     predictor.plot_results(y_test, best_predictions, best_model_name)
-
     predictor.plot_feature_analysis(processed_data, feature_columns)
-
-    predictor.plot_business_insights(processed_data)
-
+    predictor.plot_business_insights()  # Now uses stored original data
     predictor.plot_model_comparison(model_results)
-
     predictor.plot_prediction_intervals(X_test, y_test, best_predictions)
 
     print("\nAll plots have been saved as PNG files in the current directory!")
@@ -508,6 +560,7 @@ def main():
     print(f"Best RMSE: {model_results[best_model_name]['rmse']:.4f}")
     print(f"Best MAE: {model_results[best_model_name]['mae']:.4f}")
 
+    # Example prediction
     print(f"\nExample Prediction:")
     print("="*40)
 
